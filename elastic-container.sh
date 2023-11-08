@@ -231,8 +231,10 @@ case "${ACTION}" in
   echo "READY SET GO!"
   echo
   echo "Browse to https://localhost:${KIBANA_PORT}"
-  echo "Username: ${ELASTIC_USERNAME}"
-  echo "Passphrase: ${ELASTIC_PASSWORD}"
+  if [ "${VERBOSE}" = true ]; then
+    echo "Username: ${ELASTIC_USERNAME}"
+    echo "Passphrase: ${ELASTIC_PASSWORD}"
+  fi
   echo
   ;;
 
