@@ -1,5 +1,3 @@
-version: "2.2"
-
 services:
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
@@ -75,6 +73,7 @@ services:
       - esdata01:/usr/share/elasticsearch/data
     ports:
       - ${ES_PORT}:9200
+    restart: always
     environment:
       - node.name=ecp-elasticsearch
       - cluster.name=${CLUSTER_NAME}
@@ -122,6 +121,7 @@ services:
       - ./kibana.yml:/usr/share/kibana/config/kibana.yml:Z
     ports:
       - ${KIBANA_PORT}:5601
+    restart: always
     environment:
       - SERVER_NAME=ecp-kibana
       - ELASTICSEARCH_HOSTS=https://ecp-elasticsearch:9200
@@ -137,7 +137,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -I -s --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+          "curl -I -s --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/2 302'",
         ]
       interval: 10s
       timeout: 10s
@@ -149,10 +149,11 @@ services:
           condition: service_healthy
         elasticsearch:
           condition: service_healthy
-      image: docker.elastic.co/beats/elastic-agent:${STACK_VERSION}
+      image: docker.elastic.co/elastic-agent/elastic-agent:${STACK_VERSION}
       container_name: ecp-fleet-server
       volumes:
         - certs:/certs:z
+        - fleetserverdata:/usr/share/elastic-agent
       ports:
         - ${FLEET_PORT}:8220
       restart: always
@@ -179,4 +180,6 @@ volumes:
   esdata01:
     driver: local
   kibanadata:
+    driver: local
+  fleetserverdata:
     driver: local

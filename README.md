@@ -16,7 +16,7 @@ If you're interested in more details regarding this project and what to do once 
 4. Change the default password of `changeme` in the `.env` file (don't change the `elastic` username, it's a [required built-in user](https://www.elastic.co/guide/en/elasticsearch/reference/current/built-in-users.html))  
 5. Bulk enable pre-built detection rules by OS in the `.env` file (not required, see usage below)
 6. Make the `elastic-container.sh` shell script executable by running `chmod +x elastic-container.sh`
-7. Execute the `elastic-container.sh` shell script with the start argument `./elastic-container start`
+7. Execute the `elastic-container.sh` shell script with the start argument `./elastic-container.sh start`
 8. Wait for the prompt to tell you to browse to https://localhost:5601 \
 (You may be presented a browser warning due to the self-signed certificates. You can type `thisisnotsafe` or click to proceed after which you will be directed to the Elastic log in screen)
 
@@ -52,7 +52,7 @@ Please follow the [Docker installation instructions](https://docs.docker.com/eng
 ```
 apt-get install jq git curl
 ```
-**CentOS/Fedora:**  
+**RPM distributions (CentOS/Fedora/Rocky/RHEL):**  
 Please follow the [Docker installation instructions](https://docs.docker.com/engine/install/centos/). Of specific note, you *must* install the `docker-compose-plugin`, which is different than `docker-compose`.
 ```
 dnf install jq git curl
@@ -152,7 +152,6 @@ elastic
 
 Stopping will:
 - stop the Elasticsearch and Kibana containers without deleting them
-- (4/4/2023) We're tracking [an issue](https://github.com/peasead/elastic-container/issues/23) where if you don't run the `stop` command, and then reboot the host, the Fleet server can't retain its state and fails. Please run `stop` before rebooting the host that is running the stack
 
 ```
 $ ./elastic-container.sh stop
@@ -222,7 +221,7 @@ In `.env`, the variables are defined, below are the variables that can be change
 ```
 ELASTIC_PASSWORD="changeme"
 KIBANA_PASSWORD="changeme"
-STACK_VERSION="8.10.2"
+STACK_VERSION="8.14.0"
 ```
 
 If you want to change the default values, simply replace whatever is appropriate in the variable declaration.
@@ -232,3 +231,53 @@ If you want to use different Elastic Stack versions, you can change those as wel
 - [Elasticsearch](https://hub.docker.com/r/elastic/elasticsearch/tags?page=1&ordering=last_updated)
 - [Kibana](https://hub.docker.com/r/elastic/kibana/tags?page=1&ordering=last_updated)
 - [Elastic-Agent](https://hub.docker.com/r/elastic/elastic-agent/tags?page=1&ordering=last_updated)
+
+### Increase JVM Heap Size
+
+The default heap size is 512M which may be insufficent in some cases. In that case we can change the heap size by editing `docker-compose.yml` and passing `ES_JAVA_OPTS` environment variable to elasticsearch container. 
+
+```yml
+  elasticsearch:
+   ...
+    environment:
++     - ES_JAVA_OPTS=-Xmx1g -Xms1g
+```
+
+## Automating
+
+To enroll an Agent you will need the enrollment token.
+You can get the token either under `https://<KIBANAHOST>:5601/app/fleet/enrollment-tokens` or via the API
+[https://www.elastic.co/guide/en/fleet/current/fleet-api-docs.html#get-enrollment-token-api](https://www.elastic.co/guide/en/fleet/current/fleet-api-docs.html#get-enrollment-token-api)
+
+```bash
+curl -k --request GET \
+   --url 'https://<KIBANAHOST>:5601/api/fleet/enrollment_api_keys' \
+   -u <USER>:<PASSWORD> \
+   --header 'Content-Type: application/json' \
+   --header 'kbn-xsrf: xx'
+```
+This will return the tokens in JSON:
+```json
+{
+  "list": [
+    {
+      "id": "461cc77f-e9dd-46f0-b5c8-7babf644b08f",
+      "active": true,
+      "api_key_id": "ZS7TYI4B02xLEiUBWuqK",
+      "api_key": "WlM3VFlJNEIwMnhMRWlVQld1cUs6b3JmRGRyTnBUSmVOc05DeU1NelJIZw==",
+      "name": "Default (461cc77f-e9dd-46f0-b5c8-7babf644b08f)",
+      "policy_id": "09528aeb-70c7-4448-91cf-0be1e6a1838a",
+      "created_at": "2024-03-21T11:44:08.721Z"
+    },
+[...]
+```
+
+With that information it is possible to enroll an Agent, e.g. via WinRM or Ansible:
+
+```powershell
+$ProgressPreference = 'SilentlyContinue'
+Invoke-WebRequest -Uri https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.12.2-windows-x86_64.zip -OutFile elastic-agent-8.12.2-windows-x86_64.zip
+Expand-Archive .\elastic-agent-8.12.2-windows-x86_64.zip -DestinationPath .
+cd elastic-agent-8.12.2-windows-x86_64
+.\elastic-agent.exe install --url=https://<FLEETHOST>:8220 --insecure -f --enrollment-token=<api_key>
+```
