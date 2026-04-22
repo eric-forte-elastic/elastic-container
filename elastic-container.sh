@@ -9,6 +9,7 @@ declare WindowsDR
 declare MacOSDR
 
 declare COMPOSE
+declare ENGINE
 
 # Ignore following warning
 # shellcheck disable=SC1091
@@ -60,6 +61,9 @@ usage() {
   flags:
     -v              enable verbose output
     -u              same as update-version (refreshes STACK_VERSION in .env), then exit
+  container engine:
+    Set CONTAINER_ENGINE in .env to "docker" or "podman".
+    If unset, the script auto-detects (prefers docker, falls back to podman).
 EOF
 }
 
@@ -283,27 +287,55 @@ fi
 
 ACTION="${*:-help}"
 
-if docker compose >/dev/null; then
-  COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null; then
-  COMPOSE="docker-compose"
-else
-  case "${ACTION}" in
-  help | "update-version") ;;
-  *)
-    echo "elastic-container requires docker compose!"
+detect_container_engine() {
+  if [ -n "${CONTAINER_ENGINE:-}" ]; then
+    ENGINE="${CONTAINER_ENGINE}"
+  elif command -v docker &>/dev/null; then
+    ENGINE="docker"
+  elif command -v podman &>/dev/null; then
+    ENGINE="podman"
+  else
+    echo "No container engine found. Install docker or podman."
     exit 2
-    ;;
-  esac
-fi
+  fi
+
+  if [ "${ENGINE}" = "podman" ]; then
+    if podman compose --help &>/dev/null; then
+      COMPOSE="podman compose"
+    elif command -v podman-compose &>/dev/null; then
+      COMPOSE="podman-compose"
+    else
+      echo "podman detected but no compose command found."
+      echo "Install podman-compose (pip install podman-compose) or the compose plugin."
+      exit 2
+    fi
+  else
+    if docker compose version &>/dev/null; then
+      COMPOSE="docker compose"
+    elif command -v docker-compose &>/dev/null; then
+      COMPOSE="docker-compose"
+    else
+      echo "docker detected but no compose command found."
+      echo "Install docker-compose or the Docker Compose plugin."
+      exit 2
+    fi
+  fi
+}
+
+case "${ACTION}" in
+help | "update-version") ;;
+*)
+  detect_container_engine
+  echo "Using container engine: ${ENGINE} (compose: ${COMPOSE})"
+  ;;
+esac
 
 case "${ACTION}" in
 
 "stage")
-  # Collect the Elastic, Kibana, and Elastic-Agent Docker images
-  docker pull "docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}"
-  docker pull "docker.elastic.co/kibana/kibana:${STACK_VERSION}"
-  docker pull "docker.elastic.co/elastic-agent/elastic-agent:${STACK_VERSION}"
+  ${ENGINE} pull "docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}"
+  ${ENGINE} pull "docker.elastic.co/kibana/kibana:${STACK_VERSION}"
+  ${ENGINE} pull "docker.elastic.co/elastic-agent/elastic-agent:${STACK_VERSION}"
   ;;
 
 "start")
