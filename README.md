@@ -29,7 +29,7 @@ If you're interested in more details regarding this project and what to do once 
 
 ### Prerequisites: 
 
-- [Docker suite](https://docs.docker.com/get-docker/), [jq](https://stedolan.github.io/jq/download/), [curl](https://curl.se/download.html), and [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+- [Docker suite](https://docs.docker.com/get-docker/) **or** [Podman](https://podman.io/getting-started/installation) with a compose tool, [jq](https://stedolan.github.io/jq/download/), [curl](https://curl.se/download.html), and [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
 
 You can use the links above, the Linux package install commands below, or [Homebrew](https://brew.sh/) if your'e on MacOS
 
@@ -74,6 +74,73 @@ apt-get install jq git curl
 Please follow the [Docker installation instructions](https://docs.docker.com/engine/install/ubuntu/). Of specific note, you *must* install the `docker-compose-plugin`, which is different than `docker-compose`.
 
 Once the Docker suite is installed run `sudo service docker start` to start it.
+
+### Using Podman Instead of Docker
+
+This project supports [Podman](https://podman.io/) as a drop-in replacement for Docker. The script auto-detects which engine is available (preferring Docker), or you can set it explicitly in `.env`:
+
+```
+CONTAINER_ENGINE=podman
+```
+
+#### Installing Podman and a Compose Tool
+
+Podman itself does not ship with a compose command. You need to install a compose tool separately. There are several ways to install `podman-compose`:
+
+- **System package manager** (recommended where available)
+- **Pip** — `pip3 install podman-compose`
+- **Flatpak** — `flatpak install flathub io.podman_desktop.PodmanDesktop` (includes Podman Desktop with compose support)
+
+**Ubuntu/Debian:**
+```
+apt-get install podman podman-compose
+```
+
+If `podman-compose` is not available in your distribution's repos, fall back to pip:
+```
+apt-get install podman
+pip3 install podman-compose
+```
+
+**Fedora/RHEL/CentOS:**
+```
+dnf install podman podman-compose
+```
+
+**MacOS:**
+```
+brew install podman
+pip3 install podman-compose
+podman machine init
+podman machine start
+```
+
+#### Enabling the Podman Socket
+
+Compose tools communicate with Podman through a Docker-compatible API socket. The script attempts to start this automatically, but if you see `Cannot connect to docker daemon`, enable it manually:
+
+```
+systemctl --user enable --now podman.socket
+```
+
+Verify it's running:
+```
+systemctl --user status podman.socket
+```
+
+If you run Podman as root (not recommended), use the system socket instead:
+```
+sudo systemctl enable --now podman.socket
+```
+
+#### Troubleshooting Podman
+
+| Symptom | Fix |
+|---|---|
+| `Cannot connect to docker daemon` | Enable the socket: `systemctl --user enable --now podman.socket` |
+| `podman detected but no compose command found` | Install podman-compose: `pip3 install podman-compose` |
+| Permission errors on volumes | Run with `podman machine` on MacOS, or check SELinux labels (the compose file already uses `:z` / `:Z` flags) |
+| `DOCKER_HOST` not set warning | Export it manually: `export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock` |
 
 ## Usage
 

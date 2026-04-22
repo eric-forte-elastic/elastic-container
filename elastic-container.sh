@@ -300,6 +300,7 @@ detect_container_engine() {
   fi
 
   if [ "${ENGINE}" = "podman" ]; then
+    setup_podman_socket
     if podman compose --help &>/dev/null; then
       COMPOSE="podman compose"
     elif command -v podman-compose &>/dev/null; then
@@ -319,6 +320,30 @@ detect_container_engine() {
       echo "Install docker-compose or the Docker Compose plugin."
       exit 2
     fi
+  fi
+}
+
+setup_podman_socket() {
+  if [ -n "${DOCKER_HOST:-}" ]; then
+    return
+  fi
+
+  local uid_dir="/run/user/$(id -u)"
+  local user_sock="${uid_dir}/podman/podman.sock"
+
+  if [ ! -S "${user_sock}" ]; then
+    echo "Starting podman user socket..."
+    systemctl --user enable --now podman.socket 2>/dev/null || true
+  fi
+
+  if [ -S "${user_sock}" ]; then
+    export DOCKER_HOST="unix://${user_sock}"
+  elif [ -S "/var/run/docker.sock" ]; then
+    export DOCKER_HOST="unix:///var/run/docker.sock"
+  else
+    echo "Warning: could not locate a podman-compatible socket."
+    echo "Try: systemctl --user enable --now podman.socket"
+    echo "  or: export DOCKER_HOST=unix:///path/to/podman.sock"
   fi
 }
 
